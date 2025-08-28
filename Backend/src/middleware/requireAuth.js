@@ -1,4 +1,4 @@
-import { verifyAccess } from "../utils/jwt";
+import { verifyAccess } from "../utils/jwt.js";
 
 export default function requireAuth(req, res, next){
  
