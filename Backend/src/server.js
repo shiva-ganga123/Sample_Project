@@ -26,7 +26,7 @@ app.use('api', rateLimit({ windowMs: 60_000, max: 100}));
 app.use('/auth', authRoutes);
 app.use('/api/items', itemRoutes);  
 
-app.get('api/health', (req, res) => 
+app.get('/api/health', (req, res) => 
     res.json({ok : true})
 );
 
