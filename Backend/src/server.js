@@ -6,7 +6,7 @@ import helmet from 'helmet';
 import morgan from 'morgan';
 import cookieParser from 'cookie-parser';
 import rateLimit from 'express-rate-limit';
-import passport from 'passport.js';
+import passport from 'passport';
 
 import './utils/passport.js';
 import authRoutes from './routes/auth.routes.js';
