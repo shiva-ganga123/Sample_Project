@@ -37,3 +37,13 @@ export async function login(req, res){
         res.status(500).json({error: 'Login failed'});
 }
 }
+
+export async function refresh(req, res) {
+    // refresh token logic
+    res.json({ message: 'Refresh endpoint coming soon' });
+  }
+  
+  export async function logout(req, res) {
+    res.clearCookie('jid');
+    res.json({ message: 'Logged out' });
+  }
