@@ -1,5 +1,5 @@
 import {Form, Button} from 'react-bootstrap';
-import Layout from '../components/Layout';
+import Layout from '../components/Layout.jsx';
 
 export default function Register() {
     const handleSubmit = (e) => {

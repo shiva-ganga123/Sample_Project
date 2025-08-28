@@ -1,6 +1,6 @@
 import { Navbar, Nav, Container } from "react-bootstrap";
 
-export default function Navbar() {
+export default function AppNavbar() {
     return (
         <Navbar bg='primary' variant='dark' expand='lg' className='mb-4'>
             <Container>
