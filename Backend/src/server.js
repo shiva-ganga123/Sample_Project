@@ -10,7 +10,7 @@ import passport from 'passport';
 
 import './utils/passport.js';
 import authRoutes from './routes/auth.routes.js';
-import itemRoutes from './routes/items.routes.js';
+import itemRoutes from './routes/item.routes.js';
 
 const app = express();
 
