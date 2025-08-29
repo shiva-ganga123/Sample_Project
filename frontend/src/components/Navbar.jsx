@@ -1,13 +1,25 @@
-import { Navbar, Nav, Container, Button } from "react-bootstrap";
+import { Navbar, Nav, Container, Button, Dropdown, Image } from "react-bootstrap";
 import { Link, useNavigate } from 'react-router-dom';
+import { FiLogOut, FiUser, FiSettings } from 'react-icons/fi';
+import authService from '../services/auth.service';
 
 export default function AppNavbar({ isAuthenticated, setIsAuthenticated }) {
     const navigate = useNavigate();
+    const user = JSON.parse(localStorage.getItem('user') || '{}');
 
-    const handleLogout = () => {
-        localStorage.removeItem('token');
-        setIsAuthenticated(false);
-        navigate('/login');
+    const handleLogout = async () => {
+        try {
+            await authService.logout();
+            setIsAuthenticated(false);
+            navigate('/login');
+        } catch (err) {
+            console.error('Logout error:', err);
+            // Force logout even if API call fails
+            localStorage.removeItem('token');
+            localStorage.removeItem('user');
+            setIsAuthenticated(false);
+            navigate('/login');
+        }
     };
 
     return (
@@ -20,13 +32,50 @@ export default function AppNavbar({ isAuthenticated, setIsAuthenticated }) {
                         {isAuthenticated ? (
                             <>
                                 <Nav.Link as={Link} to='/dashboard'>Dashboard</Nav.Link>
-                                <Button 
-                                    variant='outline-light' 
-                                    className='ms-2'
-                                    onClick={handleLogout}
-                                >
-                                    Logout
-                                </Button>
+                                <Dropdown align="end" className="ms-3">
+                                    <Dropdown.Toggle 
+                                        variant="outline-light" 
+                                        id="dropdown-user"
+                                        className="d-flex align-items-center"
+                                    >
+                                        {user.picture ? (
+                                            <Image 
+                                                src={user.picture} 
+                                                roundedCircle 
+                                                width="32" 
+                                                height="32" 
+                                                className="me-2"
+                                                alt={user.name || 'User'}
+                                            />
+                                        ) : (
+                                            <div className="bg-light rounded-circle d-flex align-items-center justify-content-center me-2" 
+                                                style={{ width: '32px', height: '32px' }}>
+                                                <FiUser className="text-dark" />
+                                            </div>
+                                        )}
+                                        <span className="d-none d-md-inline">
+                                            {user.name || 'User'}
+                                        </span>
+                                    </Dropdown.Toggle>
+
+                                    <Dropdown.Menu className="dropdown-menu-end">
+                                        <Dropdown.Header>
+                                            <div className="fw-bold">{user.name || 'User'}</div>
+                                            <div className="small text-muted">{user.email || ''}</div>
+                                        </Dropdown.Header>
+                                        <Dropdown.Divider />
+                                        <Dropdown.Item as={Link} to="/profile">
+                                            <FiUser className="me-2" /> Profile
+                                        </Dropdown.Item>
+                                        <Dropdown.Item as={Link} to="/settings">
+                                            <FiSettings className="me-2" /> Settings
+                                        </Dropdown.Item>
+                                        <Dropdown.Divider />
+                                        <Dropdown.Item onClick={handleLogout}>
+                                            <FiLogOut className="me-2" /> Logout
+                                        </Dropdown.Item>
+                                    </Dropdown.Menu>
+                                </Dropdown>
                             </>
                         ) : (
                             <>

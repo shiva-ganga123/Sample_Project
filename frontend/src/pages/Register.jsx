@@ -29,8 +29,16 @@ export default function Register() {
         e.preventDefault();
         const form = e.currentTarget;
         
-        if (form.checkValidity() === false || password !== confirmPassword) {
+        // Client-side validation
+        if (form.checkValidity() === false) {
             e.stopPropagation();
+            setValidated(true);
+            return;
+        }
+
+        // Password confirmation check
+        if (password !== confirmPassword) {
+            setError('Passwords do not match');
             setValidated(true);
             return;
         }
@@ -39,12 +47,18 @@ export default function Register() {
         setError('');
 
         try {
-            await axios.post('http://localhost:5000/api/auth/register', {
-                name,
-                email,
+            console.log('Attempting to register user:', { name, email });
+            const response = await axios.post('http://localhost:5000/api/auth/register', {
+                name: name.trim(),
+                email: email.trim().toLowerCase(),
                 password
+            }, {
+                headers: {
+                    'Content-Type': 'application/json'
+                }
             });
             
+            console.log('Registration successful:', response.data);
             // Redirect to login page after successful registration
             navigate('/login', { 
                 state: { 
@@ -52,7 +66,32 @@ export default function Register() {
                 } 
             });
         } catch (err) {
-            setError(err.response?.data?.message || 'Registration failed. Please try again.');
+            console.error('Registration error details:', {
+                message: err.message,
+                response: err.response?.data,
+                status: err.response?.status,
+                headers: err.response?.headers
+            });
+            
+            // More specific error messages
+            if (err.response) {
+                // Server responded with an error status code
+                if (err.response.status === 400) {
+                    setError(err.response.data.message || 'Invalid registration data');
+                } else if (err.response.status === 409) {
+                    setError('An account with this email already exists');
+                } else if (err.response.status === 500) {
+                    setError('Server error. Please try again later.');
+                } else {
+                    setError(err.response.data?.message || 'Registration failed');
+                }
+            } else if (err.request) {
+                // Request was made but no response received
+                setError('No response from server. Please check your connection.');
+            } else {
+                // Something else went wrong
+                setError('An unexpected error occurred. Please try again.');
+            }
         } finally {
             setLoading(false);
         }

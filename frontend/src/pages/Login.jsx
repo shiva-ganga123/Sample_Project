@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react';
-import { Form, Button, Alert } from 'react-bootstrap';
+import { Form, Button, Alert, Container, Row, Col } from 'react-bootstrap';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
-import axios from 'axios';
+import { FcGoogle } from 'react-icons/fc';
+import authService from '../services/auth.service';
 import Layout from '../components/Layout';
 
 export default function Login({ setIsAuthenticated }) {
@@ -49,18 +50,8 @@ export default function Login({ setIsAuthenticated }) {
         setSuccessMessage('');
 
         try {
-            const response = await axios.post('http://localhost:5000/api/auth/login', {
-                email,
-                password
-            });
-
-            const { token } = response.data;
-            
-            // Store the token in localStorage
-            localStorage.setItem('token', token);
+            const response = await authService.login(email, password);
             setIsAuthenticated(true);
-            
-            // Redirect to dashboard
             navigate('/dashboard');
         } catch (err) {
             setError(err.response?.data?.message || 'Login failed. Please check your credentials and try again.');
@@ -120,12 +111,25 @@ export default function Login({ setIsAuthenticated }) {
                         className="w-100 mb-3"
                         disabled={loading}
                     >
-                        {loading ? 'Signing in...' : 'Sign In'}
+                        {loading ? 'Signing in...' : 'Sign In with Email'}
                     </Button>
 
-                    <div className="text-center mt-3">
+                    <div className="divider my-4">
+                        <span className="text-muted">OR</span>
+                    </div>
+
+                    <Button 
+                        variant="outline-primary" 
+                        className="w-100 mb-3 d-flex align-items-center justify-content-center"
+                        onClick={() => authService.loginWithGoogle()}
+                    >
+                        <FcGoogle size={20} className="me-2" />
+                        Continue with Google
+                    </Button>
+
+                    <div className="text-center mt-4">
                         Don't have an account?{' '}
-                        <Link to="/register" className="text-primary">Sign Up</Link>
+                        <Link to="/register" className="text-primary fw-medium">Sign Up</Link>
                     </div>
                 </Form>
             </div>
