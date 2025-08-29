@@ -3,19 +3,91 @@ import User from '../models/User.js';
 import {hash, compare} from '../utils/hash.js';
 import {signAccess, signRefresh} from '../utils/jwt.js';
 
-export async function register(req, res){
-    const{name, email, password} = req.body;
+export async function register(req, res) {
+    // Input validation
+    const { name, email, password } = req.body;
     
-    try{
-        const existing = await User.findOne({email});
-        if(existing) return res.status(400).json({error: 'User already exists'});
-
-        const passwordHash = await hash(password);
-        const user = await User.create({name, email, passwordHash});
-        res.json({message: 'User registered successfully', user: {id: user._id, email: user.email}});
+    // Check for required fields
+    if (!name || !email || !password) {
+        return res.status(400).json({ 
+            success: false,
+            message: 'All fields are required',
+            fields: { 
+                name: !name ? 'Name is required' : null,
+                email: !email ? 'Email is required' : null,
+                password: !password ? 'Password is required' : null
+            }
+        });
     }
-    catch(e){
-        res.status(500).json({error: 'Registration failed'});
+
+    // Email format validation
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email)) {
+        return res.status(400).json({
+            success: false,
+            message: 'Please provide a valid email address',
+            field: 'email'
+        });
+    }
+
+    // Password strength validation
+    if (password.length < 6) {
+        return res.status(400).json({
+            success: false,
+            message: 'Password must be at least 6 characters long',
+            field: 'password'
+        });
+    }
+    
+    try {
+        // Check if user already exists (case-insensitive)
+        const existing = await User.findOne({ email: { $regex: new RegExp(`^${email}$`, 'i') } });
+        if (existing) {
+            return res.status(409).json({
+                success: false,
+                message: 'An account with this email already exists',
+                field: 'email'
+            });
+        }
+
+        // Hash password and create user
+        const passwordHash = await hash(password);
+        const user = await User.create({
+            name: name.trim(),
+            email: email.trim().toLowerCase(),
+            passwordHash
+        });
+
+        // Generate tokens
+        const accessToken = signAccess({ id: user._id, email: user.email });
+        const refreshToken = signRefresh({ id: user._id });
+        
+        // Set refresh token in HTTP-only cookie
+        res.cookie('jid', refreshToken, { 
+            httpOnly: true,
+            secure: process.env.NODE_ENV === 'production',
+            sameSite: 'strict',
+            maxAge: 7 * 24 * 60 * 60 * 1000 // 7 days
+        });
+
+        // Return success response
+        res.status(201).json({
+            success: true,
+            message: 'Registration successful',
+            user: {
+                id: user._id,
+                name: user.name,
+                email: user.email
+            },
+            accessToken
+        });
+    } catch (error) {
+        console.error('Registration error:', error);
+        res.status(500).json({
+            success: false,
+            message: 'Registration failed due to a server error',
+            error: process.env.NODE_ENV === 'development' ? error.message : undefined
+        });
     }
 }
 

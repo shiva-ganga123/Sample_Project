@@ -20,10 +20,19 @@ app.use(morgan('dev'));
 app.use(cors({origin: process.env.CLIENT_ORIGIN, credentials: true}));
 app.use(express.json());
 app.use(cookieParser());
-app.use('api', rateLimit({ windowMs: 60_000, max: 100}));
 
-//Routes
-app.use('/auth', authRoutes);
+// Rate limiting
+const apiLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000, // 15 minutes
+    max: 100, // limit each IP to 100 requests per windowMs
+    message: 'Too many requests from this IP, please try again after 15 minutes'
+});
+
+// Apply rate limiting to API routes
+app.use('/api', apiLimiter);
+
+// Routes
+app.use('/api/auth', authRoutes);
 app.use('/api/items', itemRoutes);  
 
 app.get('/api/health', (req, res) => 
