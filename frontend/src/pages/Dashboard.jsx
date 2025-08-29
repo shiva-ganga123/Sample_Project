@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import {Card, Button, Row, Col} from 'react-bootstrap';
 import Layout from '../components/Layout.jsx';
-import {getItems, deleteItem} from '../services/items.jsx';
+import {getItems, deleteItem} from '../services/items.js';
 
 export default function Dashboard() {
     const [items, setItems] = useState([]);
