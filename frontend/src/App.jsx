@@ -15,19 +15,37 @@ const OAuthCallbackHandler = () => {
     useEffect(() => {
         const handleOAuthCallback = async () => {
             try {
-                // Check if we're coming back from Google OAuth
-                if (location.search.includes('code=') || location.search.includes('error=')) {
-                    const response = await authService.handleGoogleCallback();
-                    if (response.data.token) {
-                        localStorage.setItem('token', response.data.token);
-                        localStorage.setItem('user', JSON.stringify(response.data.user));
-                        window.location.href = '/dashboard';
+                // Check for token in URL (from our backend redirect)
+                const params = new URLSearchParams(location.search);
+                const token = params.get('token');
+                const error = params.get('error');
+
+                if (error) {
+                    throw new Error('Authentication failed');
+                }
+
+                if (token) {
+                    const refreshToken = params.get('refreshToken');
+                    localStorage.setItem('token', token);
+                    if (refreshToken) {
+                        localStorage.setItem('refreshToken', refreshToken);
                     }
+                    
+                    // Fetch user data using the token
+                    const userResponse = await authService.getCurrentUser();
+                    if (userResponse.data) {
+                        localStorage.setItem('user', JSON.stringify(userResponse.data));
+                    }
+                    
+                    // Redirect to dashboard
+                    window.location.href = '/dashboard';
+                } else {
+                    navigate('/login');
                 }
             } catch (err) {
                 console.error('OAuth error:', err);
                 setError('Failed to authenticate with Google. Please try again.');
-                navigate('/login');
+                navigate('/login', { state: { error: 'google_auth_failed' } });
             }
         };
 

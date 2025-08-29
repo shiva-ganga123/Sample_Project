@@ -58,10 +58,9 @@ class AuthService {
     }
   }
 
-  // Google OAuth login
+  // Google OAuth login - redirects to backend OAuth endpoint
   loginWithGoogle() {
-    // This will redirect to the backend's Google OAuth URL
-    window.location.href = `${API_URL}/google`;
+    window.location.href = 'http://localhost:5000/api/auth/google';
   }
 
   // Handle Google OAuth callback

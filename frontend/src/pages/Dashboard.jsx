@@ -1,203 +1,327 @@
 import { useState, useEffect } from 'react';
-import { Card, Button, Row, Col, Container, Spinner, Alert } from 'react-bootstrap';
-import { FiPlus, FiTrendingUp, FiDollarSign, FiCalendar, FiTrash2, FiEdit } from 'react-icons/fi';
+import { Card, Button, Row, Col, Container, Spinner, Alert, ProgressBar, Badge } from 'react-bootstrap';
+import { FiPlus, FiTrendingUp, FiCalendar, FiCheck, FiActivity } from 'react-icons/fi';
 import { Link } from 'react-router-dom';
 import Layout from '../components/Layout';
-import { getItems, deleteItem } from '../services/items';
+import { getCurrentUser } from '../services/auth.service';
 
 export default function Dashboard() {
-    const [items, setItems] = useState([]);
+    const [user, setUser] = useState(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState('');
     const [stats, setStats] = useState({
-        totalItems: 0,
-        totalAmount: 0,
-        upcomingDue: 0
+        pendingHabits: 0,
+        completedHabits: 0,
+        totalHabits: 0,
+        mood: null,
+        goalProgress: 0
     });
 
     useEffect(() => {
-        fetchItems();
+        const fetchUserData = async () => {
+            try {
+                const response = await getCurrentUser();
+                if (response.data?.user) {
+                    setUser(response.data.user);
+                    updateStats(response.data.user);
+                }
+            } catch (err) {
+                setError('Failed to load your data. Please try again.');
+                console.error('Error fetching user data:', err);
+            } finally {
+                setLoading(false);
+            }
+        };
+
+        fetchUserData();
     }, []);
 
-    const fetchItems = async () => {
+    const updateStats = (userData) => {
+        const today = new Date().toDateString();
+        const todayHabits = userData.habits?.filter(habit => 
+            habit.frequency === 'daily' && 
+            (!habit.lastCompleted || new Date(habit.lastCompleted).toDateString() !== today)
+        ) || [];
+
+        const completedHabits = (userData.habits?.length || 0) - todayHabits.length;
+        const totalHabits = userData.habits?.length || 0;
+        const goalProgress = totalHabits > 0 
+            ? Math.round((completedHabits / totalHabits) * 100) 
+            : 0;
+
+        setStats({
+            pendingHabits: todayHabits.length,
+            completedHabits,
+            totalHabits,
+            goalProgress,
+            mood: userData.today?.mood || null
+        });
+    };
+
+    const handleCompleteHabit = async (habitId) => {
         try {
-            setLoading(true);
-            const res = await getItems();
-            setItems(res.data);
-            
-            // Calculate statistics
-            const totalAmount = res.data.reduce((sum, item) => sum + (parseFloat(item.amount) || 0), 0);
-            const today = new Date();
-            const upcomingDue = res.data.filter(item => {
-                if (!item.dueDate) return false;
-                const dueDate = new Date(item.dueDate);
-                const diffTime = dueDate - today;
-                const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-                return diffDays > 0 && diffDays <= 7; // Due within the next 7 days
-            }).length;
-
-            setStats({
-                totalItems: res.data.length,
-                totalAmount,
-                upcomingDue
-            });
-        } catch (err) {
-            setError('Failed to fetch items. Please try again later.');
-            console.error('Error fetching items:', err);
-        } finally {
-            setLoading(false);
-        }
-    };
-
-    const handleDelete = async (id) => {
-        if (window.confirm('Are you sure you want to delete this item?')) {
-            try {
-                await deleteItem(id);
-                fetchItems();
-            } catch (err) {
-                setError('Failed to delete item. Please try again.');
-                console.error('Error deleting item:', err);
+            // In a real app, you would call an API endpoint to mark the habit as completed
+            const updatedUser = { ...user };
+            const habitIndex = updatedUser.habits.findIndex(h => h._id === habitId);
+            if (habitIndex !== -1) {
+                updatedUser.habits[habitIndex].lastCompleted = new Date();
+                setUser(updatedUser);
+                updateStats(updatedUser);
             }
+        } catch (err) {
+            console.error('Error completing habit:', err);
+            setError('Failed to update habit. Please try again.');
         }
     };
 
-    const StatCard = ({ title, value, icon: Icon, variant = 'primary' }) => (
-        <Card className="mb-4 border-0 shadow-sm">
-            <Card.Body className="d-flex align-items-center">
-                <div className={`bg-${variant}-subtle p-3 rounded-circle me-3`}>
-                    <Icon size={24} className={`text-${variant}`} />
-                </div>
-                <div>
-                    <h6 className="text-muted mb-0">{title}</h6>
-                    <h4 className="mb-0">{value}</h4>
-                </div>
-            </Card.Body>
-        </Card>
-    );
+    const getMoodEmoji = (mood) => {
+        switch (mood) {
+            case 'excellent': return '😊';
+            case 'good': return '🙂';
+            case 'neutral': return '😐';
+            case 'bad': return '😕';
+            case 'terrible': return '😔';
+            default: return '🤔';
+        }
+    };
+
+    const getMoodLabel = (mood) => {
+        if (!mood) return 'Not set';
+        return mood.charAt(0).toUpperCase() + mood.slice(1);
+    };
 
     if (loading) {
         return (
             <Layout>
-                <div className="d-flex justify-content-center align-items-center" style={{ minHeight: '50vh' }}>
-                    <Spinner animation="border" variant="primary" />
-                </div>
+                <Container className="py-5 text-center">
+                    <Spinner animation="border" role="status">
+                        <span className="visually-hidden">Loading...</span>
+                    </Spinner>
+                    <p className="mt-2">Loading your life dashboard...</p>
+                </Container>
+            </Layout>
+        );
+    }
+
+    if (error) {
+        return (
+            <Layout>
+                <Container className="py-5">
+                    <Alert variant="danger">{error}</Alert>
+                </Container>
             </Layout>
         );
     }
 
     return (
         <Layout>
-            <div className="dashboard-container">
-                <div className="d-flex justify-content-between align-items-center mb-4">
-                    <h2 className="mb-0">Dashboard</h2>
-                    <Button as={Link} to="/items/new" variant="primary" className="d-flex align-items-center">
-                        <FiPlus className="me-2" /> Add New Item
-                    </Button>
-                </div>
-
-                {error && <Alert variant="danger">{error}</Alert>}
-
-                {/* Stats Row */}
-                <Row className="mb-4">
-                    <Col md={4}>
-                        <StatCard 
-                            title="Total Items" 
-                            value={stats.totalItems} 
-                            icon={FiTrendingUp} 
-                            variant="primary" 
-                        />
+            <Container className="py-4">
+                <h1 className="mb-4">Life Dashboard</h1>
+                
+                {/* Stats Overview */}
+                <Row className="mb-4 g-4">
+                    <Col md={3} sm={6}>
+                        <Card className="h-100 shadow-sm">
+                            <Card.Body className="text-center">
+                                <div className="display-4 mb-2">{getMoodEmoji(stats.mood)}</div>
+                                <Card.Title>Today's Mood</Card.Title>
+                                <Card.Text className="text-muted">
+                                    {getMoodLabel(stats.mood)}
+                                </Card.Text>
+                                <Button variant="outline-primary" size="sm">Log Mood</Button>
+                            </Card.Body>
+                        </Card>
                     </Col>
-                    <Col md={4}>
-                        <StatCard 
-                            title="Total Amount" 
-                            value={`$${stats.totalAmount.toLocaleString()}`} 
-                            icon={FiDollarSign} 
-                            variant="success" 
-                        />
+                    
+                    <Col md={3} sm={6}>
+                        <Card className="h-100 shadow-sm">
+                            <Card.Body className="text-center">
+                                <div className="display-4 mb-2">
+                                    {stats.completedHabits}/{stats.totalHabits || 1}
+                                </div>
+                                <Card.Title>Daily Habits</Card.Title>
+                                <div className="mb-2">
+                                    <ProgressBar 
+                                        now={stats.goalProgress} 
+                                        label={`${stats.goalProgress}%`} 
+                                        variant="success"
+                                    />
+                                </div>
+                                <small className="text-muted">{stats.pendingHabits} pending today</small>
+                            </Card.Body>
+                        </Card>
                     </Col>
-                    <Col md={4}>
-                        <StatCard 
-                            title="Upcoming Due" 
-                            value={stats.upcomingDue} 
-                            icon={FiCalendar} 
-                            variant="warning" 
-                        />
+                    
+                    <Col md={3} sm={6}>
+                        <Card className="h-100 shadow-sm">
+                            <Card.Body className="text-center">
+                                <div className="display-4 mb-2">
+                                    <FiActivity size={40} className="text-primary" />
+                                </div>
+                                <Card.Title>Current Streak</Card.Title>
+                                <Card.Text className="h3 mb-0">
+                                    {user?.habits?.[0]?.currentStreak || 0} days
+                                </Card.Text>
+                                <small className="text-muted">Best: {user?.habits?.[0]?.bestStreak || 0} days</small>
+                            </Card.Body>
+                        </Card>
+                    </Col>
+                    
+                    <Col md={3} sm={6}>
+                        <Card className="h-100 shadow-sm">
+                            <Card.Body className="text-center">
+                                <div className="display-4 mb-2">
+                                    <FiCalendar size={40} className="text-warning" />
+                                </div>
+                                <Card.Title>Upcoming</Card.Title>
+                                <Card.Text className="h5 mb-1">
+                                    {user?.goals?.filter(g => !g.isCompleted).length || 0} goals
+                                </Card.Text>
+                                <Card.Text className="text-muted small">in progress</Card.Text>
+                                <Button variant="outline-primary" size="sm">View Goals</Button>
+                            </Card.Body>
+                        </Card>
                     </Col>
                 </Row>
-
-                {/* Items List */}
-                <Card className="border-0 shadow-sm">
-                    <Card.Header className="bg-white border-0 py-3">
-                        <h5 className="mb-0">Your Items</h5>
+                
+                {/* Today's Habits */}
+                <Card className="mb-4 shadow-sm">
+                    <Card.Header className="d-flex justify-content-between align-items-center">
+                        <h5 className="mb-0">Today's Habits</h5>
+                        <Button variant="primary" size="sm">
+                            <FiPlus className="me-1" /> Add Habit
+                        </Button>
                     </Card.Header>
-                    <Card.Body className="p-0">
-                        {items.length === 0 ? (
-                            <div className="text-center py-5">
-                                <p className="text-muted">No items found. Add your first item to get started!</p>
-                                <Button as={Link} to="/items/new" variant="outline-primary">
-                                    <FiPlus className="me-2" /> Add Your First Item
-                                </Button>
-                            </div>
-                        ) : (
-                            <div className="list-group list-group-flush">
-                                {items.map((item) => (
-                                    <div key={item._id} className="list-group-item list-group-item-action">
-                                        <div className="d-flex justify-content-between align-items-center">
-                                            <div>
-                                                <h6 className="mb-1">{item.title}</h6>
-                                                <div className="text-muted small">
-                                                    <span className="me-3">
-                                                        <FiDollarSign className="me-1" />
-                                                        {parseFloat(item.amount).toFixed(2)}
-                                                    </span>
-                                                    {item.dueDate && (
-                                                        <span>
-                                                            <FiCalendar className="me-1" />
-                                                            {new Date(item.dueDate).toLocaleDateString()}
-                                                        </span>
-                                                    )}
+                    <Card.Body>
+                        {user?.habits?.length > 0 ? (
+                            <div className="list-group">
+                                {user.habits.map((habit, index) => {
+                                    const isCompleted = habit.lastCompleted && 
+                                        new Date(habit.lastCompleted).toDateString() === new Date().toDateString();
+                                    
+                                    return (
+                                        <div key={index} className="list-group-item">
+                                            <div className="d-flex justify-content-between align-items-center">
+                                                <div>
+                                                    <h6 className="mb-1">
+                                                        {habit.name}
+                                                        {isCompleted && (
+                                                            <Badge bg="success" className="ms-2">
+                                                                <FiCheck className="me-1" /> Done
+                                                            </Badge>
+                                                        )}
+                                                    </h6>
+                                                    <small className="text-muted">{habit.description}</small>
+                                                </div>
+                                                <div>
+                                                    <Badge bg="info" className="me-2">
+                                                        {habit.frequency}
+                                                    </Badge>
+                                                    <Button 
+                                                        variant={isCompleted ? "outline-secondary" : "outline-success"}
+                                                        size="sm"
+                                                        onClick={() => handleCompleteHabit(habit._id)}
+                                                        disabled={isCompleted}
+                                                    >
+                                                        {isCompleted ? 'Completed' : 'Complete'}
+                                                    </Button>
                                                 </div>
                                             </div>
-                                            <div>
-                                                <Button 
-                                                    variant="outline-primary" 
-                                                    size="sm" 
-                                                    className="me-2"
-                                                    as={Link}
-                                                    to={`/items/edit/${item._id}`}
-                                                >
-                                                    <FiEdit size={16} />
-                                                </Button>
-                                                <Button 
-                                                    variant="outline-danger" 
-                                                    size="sm"
-                                                    onClick={() => handleDelete(item._id)}
-                                                >
-                                                    <FiTrash2 size={16} />
-                                                </Button>
-                                            </div>
                                         </div>
-                                    </div>
-                                ))}
+                                    );
+                                })}
+                            </div>
+                        ) : (
+                            <div className="text-center py-4">
+                                <p className="text-muted">No habits added yet.</p>
+                                <Button variant="primary">
+                                    <FiPlus className="me-1" /> Add Your First Habit
+                                </Button>
                             </div>
                         )}
                     </Card.Body>
                 </Card>
-            </div>
-
-            <style jsx global>{`
-                .dashboard-container {
-                    max-width: 1200px;
-                    margin: 0 auto;
-                    padding: 0 15px;
-                }
-                .stat-card {
-                    transition: transform 0.2s;
-                }
-                .stat-card:hover {
-                    transform: translateY(-5px);
-                }
-            `}</style>
+                
+                {/* Mood & Goals Summary */}
+                <Row>
+                    <Col md={6}>
+                        <Card className="mb-4 shadow-sm h-100">
+                            <Card.Header>
+                                <h5 className="mb-0">Mood Tracker</h5>
+                            </Card.Header>
+                            <Card.Body className="text-center py-5">
+                                <div className="display-1 mb-3">
+                                    {stats.mood ? getMoodEmoji(stats.mood) : '🤔'}
+                                </div>
+                                <h4>How are you feeling today?</h4>
+                                <p className="text-muted">
+                                    {stats.mood 
+                                        ? `You're feeling ${stats.mood} today.`
+                                        : 'Log your mood to track your emotional well-being.'}
+                                </p>
+                                <div className="d-flex justify-content-center gap-2 mt-3">
+                                    {['terrible', 'bad', 'neutral', 'good', 'excellent'].map((mood) => (
+                                        <Button 
+                                            key={mood}
+                                            variant={stats.mood === mood ? 'primary' : 'outline-secondary'}
+                                            onClick={() => {}}
+                                            className="rounded-circle"
+                                            style={{ width: '50px', height: '50px' }}
+                                        >
+                                            {getMoodEmoji(mood)}
+                                        </Button>
+                                    ))}
+                                </div>
+                            </Card.Body>
+                        </Card>
+                    </Col>
+                    
+                    <Col md={6}>
+                        <Card className="mb-4 shadow-sm h-100">
+                            <Card.Header className="d-flex justify-content-between align-items-center">
+                                <h5 className="mb-0">Recent Goals</h5>
+                                <Button variant="outline-primary" size="sm">
+                                    <FiPlus className="me-1" /> New Goal
+                                </Button>
+                            </Card.Header>
+                            <Card.Body>
+                                {user?.goals?.length > 0 ? (
+                                    <div className="list-group">
+                                        {user.goals.slice(0, 3).map((goal, index) => (
+                                            <div key={index} className="list-group-item">
+                                                <div className="d-flex w-100 justify-content-between">
+                                                    <h6 className="mb-1">{goal.title}</h6>
+                                                    <Badge bg={goal.isCompleted ? 'success' : 'warning'}>
+                                                        {goal.isCompleted ? 'Completed' : 'In Progress'}
+                                                    </Badge>
+                                                </div>
+                                                <p className="mb-1">{goal.description}</p>
+                                                <small className="text-muted">
+                                                    {goal.targetDate && `Target: ${new Date(goal.targetDate).toLocaleDateString()}`}
+                                                </small>
+                                                <div className="mt-2">
+                                                    <ProgressBar 
+                                                        now={goal.progress || 0} 
+                                                        label={`${goal.progress || 0}%`} 
+                                                        variant={goal.isCompleted ? 'success' : 'primary'}
+                                                    />
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                ) : (
+                                    <div className="text-center py-4">
+                                        <p className="text-muted">No goals set yet.</p>
+                                        <Button variant="primary">
+                                            <FiPlus className="me-1" /> Create Your First Goal
+                                        </Button>
+                                    </div>
+                                )}
+                            </Card.Body>
+                        </Card>
+                    </Col>
+                </Row>
+            </Container>
         </Layout>
     );
 }

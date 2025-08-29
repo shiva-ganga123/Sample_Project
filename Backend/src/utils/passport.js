@@ -1,12 +1,12 @@
 import passport from 'passport';
-
-import {Strategy as GoogleStrategy} from 'passport-google-oauth20';
+import { Strategy as GoogleStrategy } from 'passport-google-oauth20';
 import User from '../models/User.js';
+import config from '../config/index.js';
 
 passport.use(new GoogleStrategy({
-    clientID: process.env.GOOGLE_CLIENT_ID,
-    clientSecret: process.env.GOOGLE_CLIENT_SECRET,
-    callbackURL: process.env.GOOGLE_CALLBACK_URL
+    clientID: config.google.clientID,
+    clientSecret: config.google.clientSecret,
+    callbackURL: config.google.callbackURL
 }, async (accessToken, refreshToken, profile, done) => {
     try{
         let user = await User.findOne({googleId: profile.id});
