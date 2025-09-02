@@ -95,23 +95,45 @@ export async function register(req, res) {
     }
 }
 
-export async function login(req, res){
-    const {email, password} = req.body;
-    try{
-        const user = await User.findOne({email});
-        if(!user) return res.status(401).json({error: 'Invalid credentials'});
+export async function login(req, res) {
+    const { email, password } = req.body;
+    try {
+        const user = await User.findOne({ email }).select('-passwordHash -__v');
+        if (!user) return res.status(401).json({ success: false, message: 'Invalid credentials' });
+        
         const valid = await compare(password, user.passwordHash);
+        if (!valid) return res.status(401).json({ success: false, message: 'Invalid credentials' });
 
-        if(!valid) return res.status(401).json({error: 'Invalid credentials'});
-
-        const accessToken = signAccess({id: user._id, email: user.email});
-        const refreshToken = signRefresh({id: user._id});
-        res.cookie('jid',refreshToken, {httpOnly: true, samesite: 'lax'})
-        res.json({accessToken});
+        const accessToken = signAccess({ id: user._id, email: user.email });
+        const refreshToken = signRefresh({ id: user._id });
+        
+        // Set refresh token in HTTP-only cookie
+        res.cookie('jid', refreshToken, { 
+            httpOnly: true, 
+            secure: process.env.NODE_ENV === 'production',
+            sameSite: 'lax',
+            maxAge: 7 * 24 * 60 * 60 * 1000 // 7 days
+        });
+        
+        // Return user data and access token
+        res.json({
+            success: true,
+            accessToken,
+            user: {
+                id: user._id,
+                name: user.name,
+                email: user.email,
+                // Add other user fields you need in the frontend
+            }
+        });
+    } catch (error) {
+        console.error('Login error:', error);
+        res.status(500).json({ 
+            success: false, 
+            message: 'Login failed',
+            error: process.env.NODE_ENV === 'development' ? error.message : undefined
+        });
     }
-    catch(e){
-        res.status(500).json({error: 'Login failed'});
-}
 }
 
 export async function refresh(req, res) {
@@ -258,7 +280,6 @@ const googleStrategy = new GoogleStrategy({
 // Add error handling for the strategy
 googleStrategy.name = 'google';
 passport.use(googleStrategy);
-
 // Serialize/deserialize user
 passport.serializeUser((user, done) => {
     done(null, user.id);

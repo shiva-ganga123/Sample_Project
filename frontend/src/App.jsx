@@ -217,8 +217,7 @@ const useAuth = () => {
         user,
         login,
         logout,
-        checkAuth,
-        logout
+        checkAuth
     };
 };
 

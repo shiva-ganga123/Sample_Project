@@ -58,17 +58,32 @@ class AuthService {
   // Regular email/password login
   async login(email, password) {
     try {
-      const response = await api.post('/auth/login', { email, password });
-      if (response.data.accessToken) {
-        localStorage.setItem('token', response.data.accessToken);
-        if (response.data.user) {
-          localStorage.setItem('user', JSON.stringify(response.data.user));
-        }
+      const response = await api.post('/auth/login', { email, password }, {
+        withCredentials: true // Important for sending/receiving cookies
+      });
+      
+      if (!response.data.success) {
+        throw new Error(response.data.message || 'Login failed');
       }
+      
+      // Store token and user data
+      localStorage.setItem('token', response.data.accessToken);
+      if (response.data.user) {
+        localStorage.setItem('user', JSON.stringify(response.data.user));
+      }
+      
       return response.data;
     } catch (error) {
       console.error('Login error:', error);
-      throw error;
+      // Clear any existing auth data on error
+      localStorage.removeItem('token');
+      localStorage.removeItem('user');
+      
+      // Provide a more user-friendly error message
+      const errorMessage = error.response?.data?.message || 
+                         error.message || 
+                         'Login failed. Please check your credentials and try again.';
+      throw new Error(errorMessage);
     }
   }
 
@@ -119,16 +134,17 @@ class AuthService {
       if (!token) {
         // No token means user is not authenticated
         localStorage.removeItem('user');
-        return { data: { user: null } };
+        throw new Error('No authentication token found');
       }
       
       const response = await api.get('/auth/me', {
         headers: {
           'Authorization': `Bearer ${token}`
-        }
+        },
+        withCredentials: true // Important for sending cookies
       });
       
-      if (response.data?.user) {
+      if (response.data?.success && response.data.user) {
         localStorage.setItem('user', JSON.stringify(response.data.user));
         return { data: { user: response.data.user } };
       }
