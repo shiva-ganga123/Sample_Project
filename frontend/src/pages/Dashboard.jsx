@@ -3,7 +3,7 @@ import { Card, Button, Row, Col, Container, Spinner, Alert, ProgressBar, Badge }
 import { FiPlus, FiTrendingUp, FiCalendar, FiCheck, FiActivity } from 'react-icons/fi';
 import { Link } from 'react-router-dom';
 import Layout from '../components/Layout';
-import { getCurrentUser } from '../services/auth.service';
+import authService from '../services/auth.service';
 
 export default function Dashboard() {
     const [user, setUser] = useState(null);
@@ -18,22 +18,71 @@ export default function Dashboard() {
     });
 
     useEffect(() => {
+        let isMounted = true;
+        
         const fetchUserData = async () => {
+            if (!isMounted) return;
+            
             try {
-                const response = await getCurrentUser();
-                if (response.data?.user) {
+                setLoading(true);
+                setError('');
+                console.log('Fetching user data...');
+                
+                // Check for existing user data first
+                const storedUser = localStorage.getItem('user');
+                if (storedUser) {
+                    const parsedUser = JSON.parse(storedUser);
+                    if (isMounted) {
+                        setUser(parsedUser);
+                        updateStats(parsedUser);
+                    }
+                }
+                
+                // Then fetch fresh data
+                const response = await authService.getCurrentUser();
+                console.log('User data response:', response);
+                
+                if (!isMounted) return;
+                
+                if (response?.data?.user) {
                     setUser(response.data.user);
                     updateStats(response.data.user);
+                } else {
+                    console.log('No user data in response, clearing auth');
+                    // Clear invalid auth data
+                    localStorage.removeItem('token');
+                    localStorage.removeItem('user');
+                    window.location.href = '/login';
+                    return;
                 }
             } catch (err) {
-                setError('Failed to load your data. Please try again.');
-                console.error('Error fetching user data:', err);
+                console.error('Error in fetchUserData:', err);
+                if (!isMounted) return;
+                
+                // Clear auth data on error
+                localStorage.removeItem('token');
+                localStorage.removeItem('user');
+                
+                setError('Your session has expired. Please log in again.');
+                
+                // Redirect to login after showing error
+                setTimeout(() => {
+                    if (window.location.pathname !== '/login') {
+                        window.location.href = '/login';
+                    }
+                }, 1500);
             } finally {
-                setLoading(false);
+                if (isMounted) {
+                    setLoading(false);
+                }
             }
         };
 
         fetchUserData();
+
+        return () => {
+            isMounted = false;
+        };
     }, []);
 
     const updateStats = (userData) => {
@@ -93,12 +142,12 @@ export default function Dashboard() {
     if (loading) {
         return (
             <Layout>
-                <Container className="py-5 text-center">
-                    <Spinner animation="border" role="status">
+                <div className="d-flex flex-column justify-content-center align-items-center" style={{ height: '80vh' }}>
+                    <div className="spinner-border text-primary mb-3" role="status" style={{ width: '3rem', height: '3rem' }}>
                         <span className="visually-hidden">Loading...</span>
-                    </Spinner>
-                    <p className="mt-2">Loading your life dashboard...</p>
-                </Container>
+                    </div>
+                    <p className="text-muted">Loading your dashboard...</p>
+                </div>
             </Layout>
         );
     }

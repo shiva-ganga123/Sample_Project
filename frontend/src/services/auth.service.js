@@ -1,32 +1,46 @@
 import axios from 'axios';
 
-const API_URL = 'http://localhost:5000/api/auth';
+const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
 
-// Create axios instance
+// Create axios instance with default config
 const api = axios.create({
-    baseURL: 'http://localhost:5000/api',
-    headers: {
-        'Content-Type': 'application/json',
-    },
-    withCredentials: true // Important for cookies
+  baseURL: API_URL,
+  withCredentials: true
 });
 
-// Add response interceptor for error handling
+// Request interceptor to add auth token to requests
+api.interceptors.request.use(
+  (config) => {
+    const token = localStorage.getItem('token');
+    if (token) {
+      config.headers.Authorization = `Bearer ${token}`;
+    }
+    console.log('Request config:', config);
+    return config;
+  },
+  (error) => {
+    console.error('Request error:', error);
+    return Promise.reject(error);
+  }
+);
+
+// Response interceptor to handle errors
 api.interceptors.response.use(
-    (response) => response,
-    (error) => {
-        if (error.response) {
-            // The request was made and the server responded with a status code
-            // that falls out of the range of 2xx
-            console.error('API Error:', error.response.data);
-            return Promise.reject({
-                message: error.response.data.message || 'An error occurred',
-                status: error.response.status,
-                data: error.response.data
-            });
-        } else if (error.request) {
-            // The request was made but no response was received
-            console.error('API Error: No response received', error.request);
+  (response) => {
+    console.log('Response:', response.config.url, response.data);
+    return response;
+  },
+  (error) => {
+    console.error('Response error:', error.response?.data || error.message);
+    
+    // Handle 401 Unauthorized
+    if (error.response?.status === 401) {
+      localStorage.removeItem('token');
+      localStorage.removeItem('user');
+      // Only redirect if we're not already on the login page
+      if (window.location.pathname !== '/login') {
+        window.location.href = '/login';
+      }
             return Promise.reject({
                 message: 'No response from server. Please check your connection.'
             });
@@ -60,14 +74,19 @@ class AuthService {
 
   // Google OAuth login - redirects to backend OAuth endpoint
   loginWithGoogle() {
-    window.location.href = 'http://localhost:5000/api/auth/google';
+    window.location.href = `${API_URL}/auth/google`;
   }
 
   // Handle Google OAuth callback
-  handleGoogleCallback() {
-    return axios.get(`${API_URL}/google/callback`, { 
-      withCredentials: true 
-    });
+  handleGoogleCallback(token, refreshToken) {
+    if (token) {
+      localStorage.setItem('token', token);
+      if (refreshToken) {
+        localStorage.setItem('refreshToken', refreshToken);
+      }
+      return this.getCurrentUser();
+    }
+    return Promise.reject('No token received');
   }
 
   // Register new user
@@ -93,9 +112,37 @@ class AuthService {
     }
   }
 
-  // Get current user from localStorage
-  getCurrentUser() {
-    return JSON.parse(localStorage.getItem('user'));
+  // Get current user from backend
+  async getCurrentUser() {
+    try {
+      const token = localStorage.getItem('token');
+      if (!token) {
+        // No token means user is not authenticated
+        localStorage.removeItem('user');
+        return { data: { user: null } };
+      }
+      
+      const response = await api.get('/auth/me', {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+      
+      if (response.data?.user) {
+        localStorage.setItem('user', JSON.stringify(response.data.user));
+        return { data: { user: response.data.user } };
+      }
+      
+      return { data: { user: null } };
+    } catch (error) {
+      console.error('Error in getCurrentUser:', error);
+      // Clear invalid token
+      if (error.response?.status === 401) {
+        localStorage.removeItem('token');
+        localStorage.removeItem('user');
+      }
+      throw error;
+    }
   }
 
   // Get auth token

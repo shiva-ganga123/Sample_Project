@@ -5,7 +5,7 @@ import { FcGoogle } from 'react-icons/fc';
 import authService from '../services/auth.service';
 import Layout from '../components/Layout';
 
-export default function Login({ setIsAuthenticated }) {
+export default function Login() {
     const [formData, setFormData] = useState({
         email: '',
         password: ''
@@ -35,26 +35,41 @@ export default function Login({ setIsAuthenticated }) {
         });
     };
 
+    const handleGoogleLogin = () => {
+        // Clear any existing tokens
+        localStorage.removeItem('token');
+        localStorage.removeItem('refreshToken');
+        localStorage.removeItem('user');
+        
+        // Redirect to backend OAuth endpoint
+        window.location.href = `${import.meta.env.VITE_API_URL}/auth/google`;
+    };
+
     const handleSubmit = async (e) => {
         e.preventDefault();
+        setError('');
+        setSuccessMessage('');
+        setLoading(true);
+
         const form = e.currentTarget;
-        
-        if (form.checkValidity() === false) {
+        if (!form.checkValidity()) {
             e.stopPropagation();
             setValidated(true);
+            setLoading(false);
             return;
         }
 
-        setLoading(true);
-        setError('');
-        setSuccessMessage('');
-
         try {
-            const response = await authService.login(email, password);
-            setIsAuthenticated(true);
-            navigate('/dashboard');
+            const response = await authService.login(formData);
+            if (response.data) {
+                // The auth service already handles token storage
+                // Just refresh the page to trigger the auth flow
+                window.location.href = '/dashboard';
+            }
         } catch (err) {
-            setError(err.response?.data?.message || 'Login failed. Please check your credentials and try again.');
+            console.error('Login error:', err);
+            const errorMessage = err.response?.data?.message || 'Login failed. Please try again.';
+            setError(errorMessage);
         } finally {
             setLoading(false);
         }

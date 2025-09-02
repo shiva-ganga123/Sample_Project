@@ -3,21 +3,20 @@ import { Link, useNavigate } from 'react-router-dom';
 import { FiLogOut, FiUser, FiSettings } from 'react-icons/fi';
 import authService from '../services/auth.service';
 
-export default function AppNavbar({ isAuthenticated, setIsAuthenticated }) {
+export default function AppNavbar({ isAuthenticated, onLogout }) {
     const navigate = useNavigate();
     const user = JSON.parse(localStorage.getItem('user') || '{}');
 
     const handleLogout = async () => {
         try {
             await authService.logout();
-            setIsAuthenticated(false);
-            navigate('/login');
         } catch (err) {
-            console.error('Logout error:', err);
-            // Force logout even if API call fails
-            localStorage.removeItem('token');
-            localStorage.removeItem('user');
-            setIsAuthenticated(false);
+            console.error('Logout API error:', err);
+            // Continue with client-side logout even if API call fails
+        } finally {
+            // Call the onLogout callback from parent
+            onLogout();
+            // Navigate to login
             navigate('/login');
         }
     };

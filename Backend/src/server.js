@@ -61,13 +61,6 @@ const connectDB = async () => {
     }
 };
 
-// Handle unhandled promise rejections
-process.on('unhandledRejection', (err) => {
-    console.error('Unhandled Rejection:', err);
-    // Close server & exit process
-    server.close(() => process.exit(1));
-});
-
 // Connect to the database and start the server
 const startServer = async () => {
     try {
@@ -76,6 +69,14 @@ const startServer = async () => {
             console.log(`Server running in ${config.nodeEnv} mode on port ${config.port}`);
             console.log(`CORS-enabled for ${config.clientOrigin}`);
         });
+        
+        // Handle unhandled promise rejections after server is created
+        process.on('unhandledRejection', (err) => {
+            console.error('Unhandled Rejection:', err);
+            // Close server & exit process
+            server.close(() => process.exit(1));
+        });
+        
     } catch (error) {
         console.error('Failed to start server:', error);
         process.exit(1);

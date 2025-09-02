@@ -1,7 +1,11 @@
 import User from '../models/User.js';
-
 import {hash, compare} from '../utils/hash.js';
 import {signAccess, signRefresh} from '../utils/jwt.js';
+
+import bcrypt from 'bcrypt';
+import jwt from 'jsonwebtoken';
+import passport from 'passport';
+import { Strategy as GoogleStrategy } from 'passport-google-oauth20';
 
 export async function register(req, res) {
     // Input validation
@@ -121,18 +125,31 @@ export async function refresh(req, res) {
 }
 
 // Google OAuth callback
-const handleGoogleCallback = async (accessToken, refreshToken, profile, done) => {
+const handleGoogleCallback = async (req, accessToken, refreshToken, profile, done) => {
     try {
-        let user = await User.findOne({ email: profile.emails[0].value });
+        console.log('Google profile:', JSON.stringify(profile, null, 2));
+        
+        if (!profile) {
+            console.error('No profile data from Google');
+            return done(null, false, { message: 'No profile data from Google' });
+        }
+        
+        if (!profile.emails || !profile.emails[0] || !profile.emails[0].value) {
+            console.error('No email in Google profile:', profile);
+            return done(null, false, { message: 'No email found in Google profile' });
+        }
+
+        const email = profile.emails[0].value;
+        let user = await User.findOne({ email });
         
         if (!user) {
             // Create new user with default life tracking data
             user = new User({
-                name: profile.displayName,
-                email: profile.emails[0].value,
+                name: profile.displayName || email.split('@')[0],
+                email: email,
                 provider: 'google',
                 providerId: profile.id,
-                avatar: profile.photos?.[0]?.value,
+                avatar: profile.photos?.[0]?.value || '',
                 // Default habits for new users
                 habits: [
                     {
@@ -228,10 +245,30 @@ export async function getCurrentUser(req, res) {
     }
 }
 
-// Update the passport configuration to use this handler
-passport.use(new GoogleStrategy({
+// Configure Google OAuth strategy
+const googleStrategy = new GoogleStrategy({
     clientID: process.env.GOOGLE_CLIENT_ID,
     clientSecret: process.env.GOOGLE_CLIENT_SECRET,
     callbackURL: process.env.GOOGLE_CALLBACK_URL,
-    passReqToCallback: true
-}, handleGoogleCallback));
+    scope: ['profile', 'email'],
+    passReqToCallback: true,
+    proxy: true // Required for production with proxy
+}, handleGoogleCallback);
+
+// Add error handling for the strategy
+googleStrategy.name = 'google';
+passport.use(googleStrategy);
+
+// Serialize/deserialize user
+passport.serializeUser((user, done) => {
+    done(null, user.id);
+});
+
+passport.deserializeUser(async (id, done) => {
+    try {
+        const user = await User.findById(id);
+        done(null, user);
+    } catch (error) {
+        done(error, null);
+    }
+});
